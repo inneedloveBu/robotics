@@ -28,23 +28,26 @@ class LocalizationNode(Node):
         self.est_yaw = 0.0
 
         # 噪声标准差
-        self.sigma_v = 0.05   # m/s
-        self.sigma_w = 0.02   # rad/s
+        self.sigma_v = 0.05
+        self.sigma_w = 0.02
 
         # 记录数据
-        self.data = []        # (time, gt_x, gt_y, est_x, est_y)
+        self.data = []
         self.start_time = self.get_clock().now()
+        self.finished = False
+        self.save_done = False
 
         # 轨迹参数
-        self.dt = 0.1         # 10 Hz
+        self.dt = 0.1
         self.timer = self.create_timer(self.dt, self.control_loop)
 
-        # 状态机：0 直行，1 转向，2 再直行，3 停止
+        # 状态机：0 直行，1 暂停，2 转弯，3 暂停，4 直行，5 暂停并永久停止
         self.phase = 0
         self.phase_start_time = self.get_clock().now()
 
-        self.duration_straight = 4.0                     # 秒
-        self.duration_turn = math.pi / 2 / 0.5           # 约 3.14 秒
+        self.duration_straight = 4.0
+        self.duration_turn = math.pi / 2 / 0.5
+        self.duration_pause = 1.0
         self.v_straight = 0.5
         self.w_turn = 0.5
 
@@ -56,6 +59,9 @@ class LocalizationNode(Node):
         q = msg.pose.pose.orientation
         self.gt_yaw = quaternion_to_yaw(q)
         self.odom_received = True
+
+        if self.finished:
+            return
 
         now = self.get_clock().now()
         t = (now - self.start_time).nanoseconds / 1e9
@@ -69,42 +75,55 @@ class LocalizationNode(Node):
         elapsed = (now - self.phase_start_time).nanoseconds / 1e9
         cmd = Twist()
 
-        if self.phase == 0:
+        if self.phase == 0:          # 直行
             cmd.linear.x = self.v_straight
             cmd.angular.z = 0.0
             if elapsed >= self.duration_straight:
                 self.phase = 1
                 self.phase_start_time = now
-        elif self.phase == 1:
+        elif self.phase == 1:        # 暂停
+            cmd.linear.x = 0.0
+            cmd.angular.z = 0.0
+            if elapsed >= self.duration_pause:
+                self.phase = 2
+                self.phase_start_time = now
+        elif self.phase == 2:        # 转弯
             cmd.linear.x = 0.0
             cmd.angular.z = self.w_turn
             if elapsed >= self.duration_turn:
-                self.phase = 2
+                self.phase = 3
                 self.phase_start_time = now
-        elif self.phase == 2:
+        elif self.phase == 3:        # 暂停
+            cmd.linear.x = 0.0
+            cmd.angular.z = 0.0
+            if elapsed >= self.duration_pause:
+                self.phase = 4
+                self.phase_start_time = now
+        elif self.phase == 4:        # 再直行
             cmd.linear.x = self.v_straight
             cmd.angular.z = 0.0
             if elapsed >= self.duration_straight:
-                self.phase = 3
+                self.phase = 5
                 self.phase_start_time = now
-        else:
+        else:                        # phase 5: 永久停止
             cmd.linear.x = 0.0
             cmd.angular.z = 0.0
+            if not self.finished and elapsed >= self.duration_pause:
+                self.finished = True
+                self.get_logger().info('Trajectory complete. Saving data...')
+                self.save_data()
 
+        # 发布速度指令
         self.pub_cmd.publish(cmd)
 
-        # 用带噪声的速度更新估计位姿
-        v_noisy = cmd.linear.x + np.random.normal(0, self.sigma_v)
-        w_noisy = cmd.angular.z + np.random.normal(0, self.sigma_w)
+        # 更新估计位姿（带噪声）
+        if not self.finished:
+            v_noisy = cmd.linear.x + np.random.normal(0, self.sigma_v)
+            w_noisy = cmd.angular.z + np.random.normal(0, self.sigma_w)
 
-        self.est_x += v_noisy * math.cos(self.est_yaw) * self.dt
-        self.est_y += v_noisy * math.sin(self.est_yaw) * self.dt
-        self.est_yaw += w_noisy * self.dt
-
-        if self.phase == 3 and elapsed > 1.0:
-            self.save_data()
-            self.get_logger().info('Trajectory complete. Data saved.')
-            self.timer.cancel()
+            self.est_x += v_noisy * math.cos(self.est_yaw) * self.dt
+            self.est_y += v_noisy * math.sin(self.est_yaw) * self.dt
+            self.est_yaw += w_noisy * self.dt
 
     def save_data(self):
         filename = 'data/trajectory_data.csv'
