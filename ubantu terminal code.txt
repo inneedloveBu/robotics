@@ -1,0 +1,31 @@
+flameshot gui
+code --version
+code ~/a1
+VS Code 会打开整个 a1 项目，而不只是某一个文件。
+
+cd ~/a1
+bu@bu-ideaCenter-GeekPro:~/a1$ source /opt/ros/jazzy/setup.bash
+bu@bu-ideaCenter-GeekPro:~/a1$ ros2 launch src/launch/diff_drive.launch.py
+
+gz sim -r src/worlds/diff_drive_lidar.sdf
+
+gazebo-1] [GUI] [Err] [Application.cc:912] [QT] Failed to create OpenGL context for format QSurfaceFormat(version 2.0, options QFlags<QSurfaceFormat::FormatOption>(), depthBufferSize 24, redBufferSize -1, greenBufferSize -1, blueBufferSize -1, alphaBufferSize -1, stencilBufferSize 8, samples -1, swapBehavior QSurfaceFormat::DoubleBuffer, swapInterval 1, colorSpace QSurfaceFormat::DefaultColorSpace, profile  QSurfaceFormat::NoProfile) 
+[gazebo-1] Stack trace (most recent call last):
+[gazebo-1] #31   Object "/lib/x86_64-linux-g
+
+
+
+_______________________________________________________________
+export DISPLAY=:99
+export LIBGL_ALWAYS_SOFTWARE=1
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+cd ~/a1
+source /opt/ros/jazzy/setup.bash
+ros2 launch src/launch/diff_drive.launch.py
+
+_______________________________________________________
+gz sim -r --render-engine-server ogre2 src/worlds/diff_drive_lidar.sdf
+_______________________________________________________
+echo "Session type: $XDG_SESSION_TYPE"
+echo "DISPLAY: $DISPLAY"
+echo "WAYLAND_DISPLAY: $WAYLAND_DISPLAY"

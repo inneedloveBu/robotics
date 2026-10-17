@@ -1,3 +1,0 @@
-Ready for project
-Installing Git for Robotics
-This line was added on Github.
